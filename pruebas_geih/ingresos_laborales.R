@@ -1,14 +1,28 @@
 
 ###################
-## Análisis GEIH ##
+## An?lisis GEIH ##
 ###################
 
 library(readxl)
 library(tidyverse)
 
-# directorio hace referencia al número de vivienda
-# secuencia hace referencia al número del hogar
+# directorio hace referencia al n?mero de vivienda
+# secuencia hace referencia al n?mero del hogar
 # orden hace referencia a la persona dentro del hogar
+
+# valores NA en la muestra total
+
+ocupados_geih = ocupados[c("DIRECTORIO", "SECUENCIA_P",
+                           "ORDEN", "HOGAR", "AREA", "INGLABO")]
+
+na_ingresos_geih = ocupados_geih %>% filter(is.na(ocupados_geih$INGLABO))
+ingresos_nulos_geih= ocupados_geih %>% filter(ocupados_geih$INGLABO %in% 0)
+
+#####################
+## Muestra de Cali ##
+#####################
+
+# valores en NA en la muestra de Cali
 
 ocupados = read.csv2("datos_geih/Ocupados.CSV", sep = ";")
 ocupados_cali = ocupados %>% filter(AREA %in% 76)
@@ -21,11 +35,21 @@ ocupados_ingresos = ocupados_cali[c("DIRECTORIO", "SECUENCIA_P",
 na_ingresos = ocupados_ingresos %>% filter(is.na(ocupados_ingresos$INGLABO))
 ingresos_nulos = ocupados_ingresos %>% filter(ocupados_ingresos$INGLABO %in% 0)
 
+# se considera el siguiente conjunto de variables:
+# P6500: Antes de descuentos, cuÃ¡nto ganÃ³ el mes pasado?
+# P6510S2: El mes pasado recibiÃ³ ingresos por horas extras?
+# P6510S1: CuÃ¡nto recibiÃ³?
 
-# valores NA en la muestra total
+keep = c("DIRECTORIO", "SECUENCIA_P",
+         "ORDEN", "HOGAR", "AREA", "INGLABO",
+         "P6500", "P6510S2", "P6510S1")
 
-ocupados_geih = ocupados[c("DIRECTORIO", "SECUENCIA_P",
-                                "ORDEN", "HOGAR", "AREA", "INGLABO")]
+ocupados_cali = ocupados %>% filter(AREA %in% 76)
+ocupados_cali = ocupados_cali[keep]
 
-na_ingresos_geih = ocupados_geih %>% filter(is.na(ocupados_geih$INGLABO))
-ingresos_nulos_geih= ocupados_geih %>% filter(ocupados_geih$INGLABO %in% 0)
+
+plot(ocupados_cali$INGLABO, type = "l", col = "red") + lines(ocupados_cali$P6500, col = "green")
+
+ocupados_cali$diff = ocupados_cali$INGLABO - ocupados_cali$P6500
+
+plot(ocupados_cali$diff, type = "l")
