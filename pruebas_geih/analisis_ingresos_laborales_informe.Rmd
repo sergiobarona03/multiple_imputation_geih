@@ -1,0 +1,228 @@
+---
+title: 'Análisis general: distribución de ingresos para la población de Cali, Valle
+  del Cauca'
+author: "Proyecto de movilidad"
+date: '2022-11-11'
+output: html_document
+---
+
+```{r, message=FALSE, echo=TRUE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
+library(readxl)
+library(tidyverse)
+library(knitr)
+library(moments)
+library(maditr)
+library(mice)
+library(VIM)
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# cargar las bases de datos 
+setwd("C:/Users/lea8/Desktop/multiple_imputation_geih")
+
+Ocupados = read.csv("datos_geih/Ocupados.CSV", sep = ";")
+
+Datos_del_hogar_y_la_vivienda = read.csv("datos_geih/Datos del hogar y la vivienda.CSV", sep = ";")
+No_ocupados = read.csv("datos_geih/No ocupados.CSV", sep = ";")
+Otros_ingresos_e_impuestos = read.csv("datos_geih/Otros ingresos e impuestos.CSV", sep = ";")
+Caracteristicas_generales <- read.csv("datos_geih/Características generales, seguridad social en salud y educación.CSV", sep = ";")
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# filtro para Cali, Valle del Cauca (código 76)
+OcupadosF <- filter(Ocupados,AREA == 76)
+Datos_del_hogar_y_la_viviendaF <- filter(Datos_del_hogar_y_la_vivienda,AREA == 76)
+No_ocupadosF <- filter(No_ocupados,AREA == 76)
+Otros_ingresos_e_impuestosF <- filter(Otros_ingresos_e_impuestos,AREA == 76)
+Caracteristicas_generalesF <- filter(Caracteristicas_generales,AREA == 76)
+```
+
+
+
+```{r, echo=TRUE, warning=FALSE}
+# seleccionar variables de interés
+ocup <- select(OcupadosF,"DIRECTORIO","SECUENCIA_P","ORDEN","INGLABO") 
+
+Datos_vivi <- select(Datos_del_hogar_y_la_viviendaF,"DIRECTORIO","SECUENCIA_P","P4030S1A1","P6008")
+
+Noocup <- select(No_ocupadosF,"DIRECTORIO","SECUENCIA_P","ORDEN","P7422S1")
+
+Ot_ing <- select(Otros_ingresos_e_impuestosF,"DIRECTORIO","SECUENCIA_P","ORDEN","P7500S1A1","P7500S2A1","P7500S3A1")
+
+Car_gen <- select(Caracteristicas_generalesF,"DIRECTORIO","SECUENCIA_P","ORDEN","P3271","P6050","P6040")
+```
+
+# Método de imputación sobre los ingresos corrientes en la Gran Encuestra Integrada de Hogares (GEIH) 2022
+
+La metodología de imputación corresponde a la imputación múltiple mediante ecuaciones encadenadas. En general, se derivan cinco bases de datos imputadas a partir de 50 iteraciones. La **Tabla 1** presenta las imputaciones múltiples diferenciadas según la base de datos imputada; la **Tabla 2** presenta, por razones expositivas, una base de datos seleccionada, entre las cinco resultantes, de manera arbitraria. 
+
+```{r, message=FALSE, echo=TRUE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
+ocupados_imputar = OcupadosF[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "INGLABO")]
+
+na_ocupados_imputar = ocupados_imputar[is.na(ocupados_imputar$INGLABO),]
+
+ocupados_imputar$id = paste0(ocupados_imputar$DIRECTORIO,"-",ocupados_imputar$SECUENCIA_P,"-",ocupados_imputar$ORDEN)
+ocupados_imputar = ocupados_imputar[c("id","INGLABO")]
+
+
+#análisis de valores NA
+knitr::kable(as.matrix(summary(ocupados_imputar$INGLABO)))
+
+# imputación múltiple
+imputed_ocupados = mice(ocupados_imputar, m=5, maxit = 50, method = 'pmm')
+
+
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# revisar los valores imputados
+knitr::kable(imputed_ocupados$imp$INGLABO, caption = "Tabla 1: Imputación de ingresos corrientes para los individuos diferenciada según la base de datos. Método: imputación múltiple por ecuaciones encadenadas")
+
+# revisar la segunda 
+knitr::kable(complete(imputed_ocupados,2)[1:10,], caption = "Tabla 2: Bases de datos arbitraria imputada")
+
+```
+
+Con base en las cinco bases de datos imputadas y la base de datos sin imputar, la siguiente tabla presenta la clasificación por deciles sobre los ingresos corrientes de las personas:
+```{r, echo=TRUE, warning=FALSE}
+# merge completo
+OCUP_Noocup <- merge(ocup,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING<- merge(OCUP_Noocup,Ot_ing, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING_CAR_GEN <- merge(OCUP_Noocup_OT_ING,Car_gen, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+dataset <-merge(OCUP_Noocup_OT_ING_CAR_GEN,Datos_vivi, by = c("DIRECTORIO", "SECUENCIA_P"))
+
+# cálculo de ingresos corrientes totales por persona
+dataset <- mutate(dataset, Ingresos = rowSums(dataset[ , c("INGLABO","P7422S1","P7500S1A1","P7500S2A1","P7500S3A1")], na.rm=TRUE))
+```
+
+```{r, echo=TRUE, warning=FALSE}
+
+deciles_0 = quantile(dataset$INGLABO, probs = seq(.1,.9, by = .1), na.rm = TRUE)
+deciles_1 = quantile(complete(imputed_ocupados,1)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
+deciles_2 = quantile(complete(imputed_ocupados,2)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
+deciles_3 = quantile(complete(imputed_ocupados,3)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
+deciles_4 = quantile(complete(imputed_ocupados,4)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
+deciles_5 = quantile(complete(imputed_ocupados,5)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
+  
+data_frame_deciles = data.frame(deciles_0, deciles_1, deciles_2, deciles_3, deciles_4, deciles_5) 
+colnames(data_frame_deciles) = c("Original", "Imputada_1", "Imputada_2", "Imputada_3", "Imputada_4", "Imputada_5")
+kable(data_frame_deciles, caption = "Clasificación por deciles sobre los ingresos corrientes de las personas a partir de seis bases de datos (la base de datos original y cinco bases de datos imputados)")
+```
+
+
+# Distribución de ingresos para la población de Cali, Valle del Cauca
+En lo sucesivo, se presenta un análisis general sobre la distribución de ingresos corrientes para los hogares de Cali, Valle del Cauca. La fuente de información corresponde a los datos de la Gran Encuesta Integrada de Hogares (GEIH) para el período de septiembre/2022. Se considera que los ingresos corrientes de los hogares están contenidos en las siguientes variables: ingreso laboral (módulo de **Ocupados**); ingresos de personas no-ocupadas (módulo de **No-ocupados**); ingresos por arriendos, ingresos por jubilaciones o ingresos por pensión alimenticia de paternidad (módulo de **Otros ingresos**). La siguiente tabla presenta la información de ingresos diferenciados por hogares.
+
+
+
+```{r, echo=TRUE, warning=FALSE}
+#construcción de una variable de identificación para los hogares
+dataset$id = paste0(dataset$DIRECTORIO,"-",dataset$SECUENCIA_P)
+
+#construcción de base de datos de recepción vacía
+dataset_2 = data.frame(levels(as.factor(dataset$id)))
+colnames(dataset_2) = "id"
+dataset_2$ingresos = NA
+
+hogares_id = levels(as.factor(dataset_2$id))
+
+# bucle para el cálculo de los ingresos para los hogares
+for (k in 1:length(hogares_id)) {
+  df = data.frame()
+  df = dataset %>% filter(id %in% hogares_id[k])
+  dataset_2[which(dataset_2$id == hogares_id[k]), 2] = sum(df$Ingresos)
+}
+
+# incluir la variable de tamaño de los hogares
+dataset_2 = merge(dataset_2, dataset[c("id", "P6008")], by ="id")
+dataset_2 = dataset_2[!duplicated(dataset_2),]
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# presentación de la tabla
+knitr::kable(dataset_2[1:10,], caption = "Ingresos corrientes y tamaño de los hogares de Cali, Valle del Cauca (septiembre/2022). Fuente: GEIH.",
+             col.names = c("ID Hogar", "Ingreso corriente", "Tamaño del hogar"))
+```
+
+La siguiente figura corresponde a la función de densidad empírica asociada a los ingresos corrientes de los hogares. Nótese que, puesto que se verifica que la distribución es leptocúrtica ($kurtosis > 3$) y asimétrica positiva ($skewness > 0$), los ingresos corrientes de los hogares no siguen una distribución norma
+
+```{r, echo=TRUE, warning=FALSE}
+# densidad empírica
+plot(density(dataset_2$ingresos), xlab = "Ingresos corrientes por hogares", main = "")
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# presentación del kurtosis y medida de asimetría
+kurtosis_skewness = data.frame(kurtosis(dataset_2$ingresos), skewness(dataset_2$ingresos))
+colnames(kurtosis_skewness) = c("Kurtosis", "Skewness")
+knitr::kable(kurtosis_skewness)
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# presentación de los deciles y tamaño de los hogares
+deciles = quantile(dataset_2$ingresos, probs = seq(.1, .9, by = .1))
+dataset_2 = dataset_2 %>% mutate(deciles = cut(ingresos, c(0, deciles, Inf), c("decil 1", "decil 2", "decil 3", "decil 4", "decil 5",
+                                            "decil 6", "decil 7", "decil 8", "decil 9", "decil 10")))
+
+kurtosis_skewness = data.frame(kurtosis(dataset_2$ingresos), skewness(dataset_2$ingresos))
+colnames(kurtosis_skewness) = c("Kurtosis", "Skewness")
+knitr::kable(kurtosis_skewness)
+```
+
+```{r, echo=TRUE, warning=FALSE}
+# valores NA 
+na_values = dataset_2[is.na(dataset_2$deciles),]
+dataset_2_na = dataset_2[!is.na(dataset_2$deciles),]
+
+#summary
+summary = as.data.frame(matrix(c(as.numeric(deciles), max(dataset_2$ingresos), mean(dataset_2$ingresos)),nrow = 1))
+colnames(summary) = c("decil 1", "decil 2", "decil 3", "decil 4", "mediana", "decil 6", "decil 7", "decil 8", "decil 9", "máx.", "Media")
+knitr::kable(summary, caption = "Ingresos corrientes para los hogares de Cali (septiembre/2022). Fuente: GEIH")
+```
+
+La siguiente tabla presenta un contraste entre el tamaño y la distribución de los ingresos corrientes ---clasificada en deciles--- para los hogares de Cali en el período de septiembre/2022. Nótese que el ~87% de los hogares de Cali en la muestra se concentran en hogares unipersonales (~18%), hogares compuestos por dos (~27%), tres (~24%) y cuatro personas (~18%).Para el análisis subsiguiente se considera la composición de los hogares compuestos, principalmente, por dos, tres y cuatro personas.
+
+```{r, echo=TRUE, warning=FALSE}
+# tabla: deciles de ingresos vs tamaño del hogar
+table_1 = as.data.frame(table(dataset_2_na$deciles, dataset_2_na$P6008))
+colnames(table_1) = c("Decil", "Tamaño_hogar", "Freq")
+
+table_1_unmelt = dcast(data = table_1, Tamaño_hogar ~ Decil, value.var = "Freq")
+
+table_1_unmelt$Total = rowSums(table_1_unmelt[,2:ncol(table_1_unmelt)])
+
+total_2 = as.data.frame(matrix(c("Total", as.numeric(colSums(table_1_unmelt[, 2:ncol(table_1_unmelt)]))), nrow = 1))
+
+colnames(total_2) = colnames(table_1_unmelt)
+table_1_unmelt = rbind(table_1_unmelt, total_2)
+
+knitr::kable(table_1_unmelt, caption = "Tamaño del hogar y deciles asociados a la distribución de los ingresos corrientes en los hogares de Cali (septiembre/2022). Fuente: GEIH", col.names = c("Tamaño del hogar", colnames(table_1_unmelt)[2:ncol(table_1_unmelt)]))
+```
+
+
+```{r, echo=TRUE, warning=FALSE}
+# análisis para hogares n-personales (n =2,3,4)
+Grupo = c("[1,4)", "[4,9)", "[9,14)", "[14,19)", "[19,31)", "[31,51)",  "[51,70)",  "[70,Inf)")
+table_2_def = data.frame(Grupo)
+
+for (k in 2:4) {
+dataset_bi = filter(dataset, P6008 == k)
+dataset_bi = dataset_bi[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "P3271", "P6040", "P6008")]
+colnames(dataset_bi) = c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "Sexo", "Edad", "Size")
+dataset_bi = dataset_bi %>% mutate(Int = cut(Edad, c(c(1, 4, 9, 14, 19, 31, 51, 70), Inf), right = FALSE))
+
+table_2 = as.data.frame(table(dataset_bi$Int, dataset_bi$Sexo))
+colnames(table_2) = c("Grupo", "Sexo", "Freq")
+table_2$Sexo = factor(table_2$Sexo, levels = c(1,2), labels = c("Male", "Female"))
+table_2_unmelt = dcast(data = table_2, Grupo ~ Sexo, value.var = "Freq")
+colnames(table_2_unmelt) = c("Grupo", paste0("Male (n = ",k,")"), paste0("Female (n = ",k,")"))
+table_2_def = merge(table_2_def, table_2_unmelt, by = "Grupo")
+}
+
+kable(table_2_def, caption = "Composición para tres tamaños de hogares en Cali: hogares conformados por dos, tres y cuatro personas. Fuente: GEIH")
+
+```
+
+
