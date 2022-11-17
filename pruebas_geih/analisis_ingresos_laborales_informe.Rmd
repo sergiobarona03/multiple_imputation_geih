@@ -6,7 +6,7 @@ date: '2022-11-11'
 output: html_document
 ---
 
-```{r, message=FALSE, echo=TRUE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
 library(readxl)
 library(tidyverse)
 library(knitr)
@@ -14,12 +14,14 @@ library(moments)
 library(maditr)
 library(mice)
 library(VIM)
+library(dplyr)
+library(finalfit)
 ```
 
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
 # cargar las bases de datos 
-setwd("C:/Users/lea8/Desktop/multiple_imputation_geih")
+setwd("D:/Desktop/multiple_imputation_geih")
 
 Ocupados = read.csv("datos_geih/Ocupados.CSV", sep = ";")
 
@@ -29,7 +31,7 @@ Otros_ingresos_e_impuestos = read.csv("datos_geih/Otros ingresos e impuestos.CSV
 Caracteristicas_generales <- read.csv("datos_geih/Características generales, seguridad social en salud y educación.CSV", sep = ";")
 ```
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
 # filtro para Cali, Valle del Cauca (código 76)
 OcupadosF <- filter(Ocupados,AREA == 76)
 Datos_del_hogar_y_la_viviendaF <- filter(Datos_del_hogar_y_la_vivienda,AREA == 76)
@@ -40,53 +42,324 @@ Caracteristicas_generalesF <- filter(Caracteristicas_generales,AREA == 76)
 
 
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # seleccionar variables de interés
-ocup <- select(OcupadosF,"DIRECTORIO","SECUENCIA_P","ORDEN","INGLABO") 
+ocup <- OcupadosF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P6800", "INGLABO")]
 
-Datos_vivi <- select(Datos_del_hogar_y_la_viviendaF,"DIRECTORIO","SECUENCIA_P","P4030S1A1","P6008")
+Datos_vivi <- Datos_del_hogar_y_la_viviendaF[c("DIRECTORIO","SECUENCIA_P","P4030S1A1","P6008")]
 
-Noocup <- select(No_ocupadosF,"DIRECTORIO","SECUENCIA_P","ORDEN","P7422S1")
+Noocup <- No_ocupadosF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P7422S1")]
 
-Ot_ing <- select(Otros_ingresos_e_impuestosF,"DIRECTORIO","SECUENCIA_P","ORDEN","P7500S1A1","P7500S2A1","P7500S3A1")
+Ot_ing <- Otros_ingresos_e_impuestosF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P7500S1A1","P7500S2A1","P7500S3A1")]
 
-Car_gen <- select(Caracteristicas_generalesF,"DIRECTORIO","SECUENCIA_P","ORDEN","P3271","P6050","P6040")
+Car_gen <- Caracteristicas_generalesF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P3271","P6050","P6040", "P3042")]
 ```
 
 # Método de imputación sobre los ingresos corrientes en la Gran Encuestra Integrada de Hogares (GEIH) 2022
 
-La metodología de imputación corresponde a la imputación múltiple mediante ecuaciones encadenadas. En general, se derivan cinco bases de datos imputadas a partir de 50 iteraciones. La **Tabla 1** presenta las imputaciones múltiples diferenciadas según la base de datos imputada; la **Tabla 2** presenta, por razones expositivas, una base de datos seleccionada, entre las cinco resultantes, de manera arbitraria. 
+# Metodología: imputación múltiple mediante coincidencia de media predictiva
+Por definición, la imputación múltiple corresponde a un método de imputación fundamentado en la siguiente hipótesis de Rubin (1987): puesto que, dada la incertidumbre, no parece apropiado imputar un único valor a cada dato faltante, la imputación múltiple propone la construcción de más de un valor imputado. En general, se verifica que un número reducido de imputaciones múltiples ---cinco, por ejemplo--- son suficientes para reflejar la incertidumbre del dato faltante. 
 
-```{r, message=FALSE, echo=TRUE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
-ocupados_imputar = OcupadosF[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "INGLABO")]
+La coincidencia de media predictiva es una clase de imputación múltiple, más precisamente, un ejemplo del método hot-deck según el cual los valores faltantes son imputados a partir de una unidad que, según un criterio de distancia, se asemeja a la unidad del dato faltante. Para cada dato faltante, el criterio de distancia permite seleccionar un conjunto de unidades similares (unidades donantes), de donde se desprende la unidad cuyo valor observado es usado como valor imputado. Esto significa, entre otras cosas, que el conjunto de valores imputados está determinado estrictamente por el conjunto de valores efectivamente observados. Como observa van Bureen (2006), seleccionar un conjunto de cinco o diez donantes presenta, en general, los mejores resultados.
 
-na_ocupados_imputar = ocupados_imputar[is.na(ocupados_imputar$INGLABO),]
+En el contexto del método de coincidencia de media productiva, el criterio de distancia viene dada por la diferencia entre la media predictiva de los datos observados y la media predictiva de los datos no observados. Formalmente, supóngase un caso de imputación univariada en que, dado un conjunto de $n$ datos, existe $n_{1}$ datos faltantes y $n_{2}$ datos efectivamente observados. Sea $X \in \mathbb{R}^{n \times k}$ la matriz de datos para $k$ variables explicativas. La matriz de covariables se puede expresar como $X = (X^{obs}, X^{mis})$ donde $X^{obs} \in \mathbb{R}^{n_{1} \times k}$ es la matriz de covariables para las $n_{1}$ filas observados; y $X^{mis} \in \mathbb{R}^{n_{2} \times k}$, la matriz de covariables para las $n_{2}$ filas perdidas. Así, $\hat{\mathbf{y}}^{obs} = (y_{1}, \ldots, y_{n_{1}})$ es el vector de valores predichos para las $n_{1}$ filas observadas ---que es generalmente estimado según un modelo clásico de regresión lineal simple con estimadores MCO o estimadores de máxima verosimilitud tal que $\hat{\mathbf{y}}^{obs} = X^{obs}\hat{\mathbf{\beta_{OLS}}}$----; $\dot{\mathbf{y}}^{mis} = (y_{1}, \ldots, y_{n_{2}})$, el vector de valores predichos para las $n_{2}$ filas perdidas ---que es generalmente estimado mediante un enfoque bayesiano---.
 
-ocupados_imputar$id = paste0(ocupados_imputar$DIRECTORIO,"-",ocupados_imputar$SECUENCIA_P,"-",ocupados_imputar$ORDEN)
-ocupados_imputar = ocupados_imputar[c("id","INGLABO")]
+ Nótese que, para todo $i \in [1, \ n_{1}] \subset \mathbb{Z}$, $\hat{y_{i}}$ es la media predictiva para el $i$-ésimo dato observado; y, para todo $i \in [1, \ n_{1}] \subset \mathbb{Z}$, $\dot{y_{j}}$ es la media predictiva para el $j$-ésimo dato faltante. La distancia entre ambas medias predictivas viene dada por
+$$
+|\hat{y_{i}} – \dot{y_{j}}|
+$$
+
+Siguiendo a Andridge & Little (2010), se definen los siguientes cuatro métodos para la selección del conjunto de candidatos para unidades donantes:
+1.	Dado un umbral $\eta \in \mathbb{R}$, el conjunto de donantes candidatos viene dado por 
+$$
+\{\hat{y_{i}} \in  \hat{\mathbf{y}}^{obs} | \ \ \  \hat{y_{i}} – \dot{y_{j}}| \leq \eta\}
+$$
+
+2.	La unidad donante corresponde corresponde a la unidad más cercana, la cual satisface que 
+$$
+\min_{i \in [1, \ n_{1}] \subset \mathbb{Z}}{|\hat{y_{i}} – \dot{y_{j}}|}
+$$
+
+3.	Para $\delta \in \mathbb{Z}_{++}$, se seleccionan las primeras $\delta$ distancias $|\hat{y_{i}} – \dot{y_{j}}|$ más pequeñas.
+
+4.	Seleccionar un donante único cuya probabilidad está determinada por la distancia $|\hat{y_{i}} – \dot{y_{j}}|$.
+
+En lo sucesivo, se presenta una aplicación del método de coincidencia por media predictiva para la imputación de los ingresos corrientes en la Gran Encuesta Integrada de Hogares (GEIH) del 2022. La muestra corresponde a la ciudad de Cali, Valle del Cauca, para el período septiembre/2022. Se considera que los ingresos corrientes de los individuos están contenidos en las siguientes variables: ingreso laboral (módulo de **Ocupados**); ingresos de personas no-ocupadas (módulo de **No-ocupados**); ingresos por arriendos, ingresos por jubilaciones o ingresos por pensión alimenticia de paternidad (módulo de **Otros ingresos**). Siguiendo a Restrepo y Marín (2012), el conjunto de variables explicativas viene determinado por la especificación de la ecuación de Mincer (1974). Se considera la edad, la experiencia, el sexo, el nivel de escolaridad y las horas trabajadas como variables. La siguiente tabla corresponde a la base de datos a imputar: 
 
 
-#análisis de valores NA
-knitr::kable(as.matrix(summary(ocupados_imputar$INGLABO)))
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
+# selección de datos para imputar
+dataset_imputar = merge(ocup, Car_gen, all.x = TRUE)
 
+dataset_imputar = dataset_imputar[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "INGLABO", "P6040", "P3271", "P3042", "P6800")]
+
+dataset_imputar$id = paste0(dataset_imputar$DIRECTORIO,"-",dataset_imputar$SECUENCIA_P,"-",dataset_imputar$ORDEN)
+
+dataset_imputar = dataset_imputar[c("id","INGLABO", "P6040", "P3271", "P3042", "P6800")]
+colnames(dataset_imputar) = c("id_hogar", "ing", "edad", "sexo", "estudio", "horas")
+
+dataset_imputar$edad_sqr = dataset_imputar$edad*dataset_imputar$edad
+
+knitr::kable(dataset_imputar[1:15,], caption = "Tabla 1: Base de datos para la implementación del método de coincidencia de medias predictivas según la especificación minceriana. Fuente: GEIH (2022).", col.names = c("ID", "Ingresos corrientes", "Edad", "Sexo", "Escolaridad", "Horas trabajadas", "Edad^{2}"))
+```
+
+La variable *Horas trabajas* corresponde al número de horas trabajadas la semana anterior. Nótese que la edad y el cuadrado de la edad es considerada como una variable *proxy*. La **Tabla 2** expresa la descripción general de las variables categóricas; y la **Tabla 3**, la descripción general de las variables numéricas.
+
+```{r, echo=FALSE, warning=FALSE}
+# determinar la clase de cada variable
+dataset_imputar$id_hogar = as.character(dataset_imputar$id_hogar)
+dataset_imputar$ing = as.numeric(dataset_imputar$ing)
+dataset_imputar$edad = as.numeric(dataset_imputar$edad)
+dataset_imputar$sexo = as.factor(dataset_imputar$sexo)
+dataset_imputar$estudio = as.factor(dataset_imputar$estudio)
+dataset_imputar$horas = as.numeric(dataset_imputar$horas)
+
+
+#descripción
+knitr::kable(as.matrix(summary(dataset_imputar[c("sexo", "estudio")])),
+             col.names = c("Sexo", "Escolaridad"), 
+             caption = "Tabla 2: Descripción general de las variables categóricas")
+
+knitr::kable(as.matrix(summary(dataset_imputar[c("ing", "edad", "horas")])),
+             col.names = c("Ingresos corrientes", "Edad", "Horas trabajadas"),
+             caption = "Tabla 3: Descripción general de las variables numérica")
+```
+
+# Datos faltantes
+La siguiente figura representa los patrones de datos faltantes entre la variable dependiente ---a saber, los ingresos corrientes--- y el conjunto de covariables definido. Nótese que la muestra está compuesta por 1352, de las cuales sólo el ~2.6% de las observaciones corresponden a datos faltantes. Adicionalmente, nótese que la totalidad de los datos faltantes están concentrados en la variable *Ingresos corrientes*. Esto permite la implementación de un método de imputación múltiple univariado en que los *Ingresos corrientes* corresponden a la variable de interés. 
+
+```{r, echo=FALSE, warning=FALSE}
+dataset_imputar_pr = dataset_imputar
+colnames(dataset_imputar_pr) = c("ID", "Ingresos corrientes", "Edad", "Sexo", 
+                       "Escolaridad", "Horas trabajadas", "Edad2")
+
+explanatory <- c("Edad", "Sexo", 
+                 "Escolaridad",  
+                 "Horas trabajadas", "Edad2")
+
+dependent <- "Ingresos corrientes"
+
+dataset_imputar_pr %>% 
+  missing_pattern(dependent, explanatory)
+```
+
+# Aplicación: imputación múltiple univariada sobre ingresos corrientes en la GEIH (2022)
+Metodológicamente, se propone la imputación de los datos faltantes de la variable de ingresos corrientes por medio de un método de imputación múltiple univariado, más precisamente, el método de coincidencia de medias predictivas en su forma univariada (véase *supra*). La matriz de covariables está determinada por el conjunto de variables explicativas viene determinado por la especificación de la ecuación de Mincer (1974). Por hipótesis, para cada dato faltante, el número de donantes candidatos es $d = 5$; y, siguiendo a van Bureen (2006), se determinan $m = 5$ imputaciones, las cuales corresponden a cinco bases de datos distintas con valores imputados. Esto implica que el método de selección de la unidad donante corresponde, según la clasificación de Andridge & Little (2010), al método (3). La **Tabla 4** presenta, diferenciados según cada una de las cinco bases de datos, los resultados de la imputación.
+
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
 # imputación múltiple
-imputed_ocupados = mice(ocupados_imputar, m=5, maxit = 50, method = 'pmm')
-
-
+imputed_ocupados = mice(dataset_imputar, m=5, maxit = 50, method = 'pmm')
 ```
 
-
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # revisar los valores imputados
-knitr::kable(imputed_ocupados$imp$INGLABO, caption = "Tabla 1: Imputación de ingresos corrientes para los individuos diferenciada según la base de datos. Método: imputación múltiple por ecuaciones encadenadas")
-
-# revisar la segunda 
-knitr::kable(complete(imputed_ocupados,2)[1:10,], caption = "Tabla 2: Bases de datos arbitraria imputada")
+knitr::kable(imputed_ocupados$imp$ing, caption = "Tabla 4: Imputación de ingresos corrientes para los individuos diferenciada según la base de datos. Método: método de imputación múltiple univariada según coincidencia de la media predictiva")
 
 ```
 
-Con base en las cinco bases de datos imputadas y la base de datos sin imputar, la siguiente tabla presenta la clasificación por deciles sobre los ingresos corrientes de las personas:
-```{r, echo=TRUE, warning=FALSE}
+En lo sucesivo, a partir de las seis bases de datos derivadas ---a saber, la base de datos original y las cinco bases de datos con valores imputados---, se presenta un ejercicio de agregación. Los ingresos corrientes individuales, siguiendo la codificación de la GEIH, son agregados a nivel de hogares. La **Tabla 5** presenta la distribución por deciles de los ingresos corrientes para los hogares derivada de cada una de las seis bases de datos. 
+
+```{r, echo=FALSE, warning=FALSE}
+lista_datasets = list()
+length(lista_datasets) = 5
+lista_datasets[[1]] = complete(imputed_ocupados,1)
+lista_datasets[[2]] = complete(imputed_ocupados,2)
+lista_datasets[[3]] = complete(imputed_ocupados,3)
+lista_datasets[[4]] = complete(imputed_ocupados,4)
+lista_datasets[[5]] = complete(imputed_ocupados,5)
+
+# base de datos de recepción 
+OCUP_Noocup <- merge(ocup,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING<- merge(OCUP_Noocup,Ot_ing, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING_CAR_GEN <- merge(OCUP_Noocup_OT_ING,Car_gen, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+dataset <-merge(OCUP_Noocup_OT_ING_CAR_GEN,Datos_vivi, by = c("DIRECTORIO", "SECUENCIA_P"))
+
+# cálculo de ingresos corrientes totales por persona
+dataset <- mutate(dataset, Ingresos = rowSums(dataset[ , c("INGLABO","P7422S1","P7500S1A1","P7500S2A1","P7500S3A1")], na.rm=TRUE))
+
+#construcción de una variable de identificación para los hogares
+dataset$id = paste0(dataset$DIRECTORIO,"-",dataset$SECUENCIA_P)
+
+#construcción de base de datos de recepción vacía
+dataset_2 = data.frame(levels(as.factor(dataset$id)))
+colnames(dataset_2) = "id"
+dataset_2$ingresos = NA
+
+hogares_id = levels(as.factor(dataset_2$id))
+
+# bucle para el cálculo de los ingresos para los hogares
+for (k in 1:length(hogares_id)) {
+  df = data.frame()
+  df = dataset %>% filter(id %in% hogares_id[k])
+  dataset_2[which(dataset_2$id == hogares_id[k]), 2] = sum(df$Ingresos)
+}
+
+# cálculo de deciles
+deciles = quantile(dataset_2$ingresos, probs = seq(.1, .9, by = .1))
+
+# construcción de bases de datos de recepción:
+deciles_imputacion = data.frame(names(deciles), deciles)
+colnames(deciles_imputacion) = c("Decil", "Dataset_0")
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+
+for (l in 1:length(lista_datasets)) {
+# merge completo
+df_1 = ocup
+df_1$id_hogar = paste0(df_1$DIRECTORIO,"-",df_1$SECUENCIA_P,"-",df_1$ORDEN)
+df_2 = lista_datasets[[l]]
+df_2 = df_2[c("id_hogar", "ing")]
+
+df_1 = merge(df_1, df_2, by = "id_hogar", all.x = TRUE)
+df_1$INGLABO = df_1$ing
+df_1 = df_1[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "P6800", "INGLABO")]
+
+OCUP_Noocup <- merge(df_1,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING<- merge(OCUP_Noocup,Ot_ing, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING_CAR_GEN <- merge(OCUP_Noocup_OT_ING,Car_gen, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+dataset <-merge(OCUP_Noocup_OT_ING_CAR_GEN,Datos_vivi, by = c("DIRECTORIO", "SECUENCIA_P"))
+
+# cálculo de ingresos corrientes totales por persona
+dataset <- mutate(dataset, Ingresos = rowSums(dataset[ , c("INGLABO","P7422S1","P7500S1A1","P7500S2A1","P7500S3A1")], na.rm=TRUE))
+
+#construcción de una variable de identificación para los hogares
+dataset$id = paste0(dataset$DIRECTORIO,"-",dataset$SECUENCIA_P)
+
+#construcción de base de datos de recepción vacía
+dataset_2 = data.frame(levels(as.factor(dataset$id)))
+colnames(dataset_2) = "id"
+dataset_2$ingresos = NA
+
+hogares_id = levels(as.factor(dataset_2$id))
+
+# bucle para el cálculo de los ingresos para los hogares
+for (k in 1:length(hogares_id)) {
+  df = data.frame()
+  df = dataset %>% filter(id %in% hogares_id[k])
+  dataset_2[which(dataset_2$id == hogares_id[k]), 2] = sum(df$Ingresos)
+}
+
+# cálculo de deciles
+deciles_2 = quantile(dataset_2$ingresos, probs = seq(.1, .9, by = .1))
+
+# construcción de bases de datos para conjugar:
+df_3 = data.frame(names(deciles_2), deciles_2)
+colnames(df_3) = c("Decil", paste0("Dataset_",l))
+
+deciles_imputacion = merge(deciles_imputacion, df_3, by = "Decil")
+}
+
+knitr::kable(deciles_imputacion, caption = "Tabla 5: distribución por deciles para los ingresos corrientes de los hogares según cada bases de datos (la base de datos original y las cinco bases de datos con valores imputados)")
+
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# base de datos de recepción 
+OCUP_Noocup <- merge(ocup,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING<- merge(OCUP_Noocup,Ot_ing, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING_CAR_GEN <- merge(OCUP_Noocup_OT_ING,Car_gen, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+dataset <-merge(OCUP_Noocup_OT_ING_CAR_GEN,Datos_vivi, by = c("DIRECTORIO", "SECUENCIA_P"))
+
+# cálculo de ingresos corrientes totales por persona
+dataset <- mutate(dataset, Ingresos = rowSums(dataset[ , c("INGLABO","P7422S1","P7500S1A1","P7500S2A1","P7500S3A1")], na.rm=TRUE))
+
+#construcción de una variable de identificación para los hogares
+dataset$id = paste0(dataset$DIRECTORIO,"-",dataset$SECUENCIA_P)
+
+#construcción de base de datos de recepción vacía
+dataset_2 = data.frame(levels(as.factor(dataset$id)))
+colnames(dataset_2) = "id"
+dataset_2$ingresos = NA
+
+hogares_id = levels(as.factor(dataset_2$id))
+
+# bucle para el cálculo de los ingresos para los hogares
+for (k in 1:length(hogares_id)) {
+  df = data.frame()
+  df = dataset %>% filter(id %in% hogares_id[k])
+  dataset_2[which(dataset_2$id == hogares_id[k]), 2] = sum(df$Ingresos)
+}
+
+dataset_boxplot = dataset_2
+colnames(dataset_boxplot) = c("id", paste0("Dataset_",0))
+
+
+for (l in 1:length(lista_datasets)) {
+# merge completo
+df_1 = ocup
+df_1$id_hogar = paste0(df_1$DIRECTORIO,"-",df_1$SECUENCIA_P,"-",df_1$ORDEN)
+df_2 = lista_datasets[[l]]
+df_2 = df_2[c("id_hogar", "ing")]
+
+df_1 = merge(df_1, df_2, by = "id_hogar", all.x = TRUE)
+df_1$INGLABO = df_1$ing
+df_1 = df_1[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "P6800", "INGLABO")]
+
+OCUP_Noocup <- merge(df_1,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING<- merge(OCUP_Noocup,Ot_ing, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+OCUP_Noocup_OT_ING_CAR_GEN <- merge(OCUP_Noocup_OT_ING,Car_gen, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
+dataset <-merge(OCUP_Noocup_OT_ING_CAR_GEN,Datos_vivi, by = c("DIRECTORIO", "SECUENCIA_P"))
+
+# cálculo de ingresos corrientes totales por persona
+dataset <- mutate(dataset, Ingresos = rowSums(dataset[ , c("INGLABO","P7422S1","P7500S1A1","P7500S2A1","P7500S3A1")], na.rm=TRUE))
+
+#construcción de una variable de identificación para los hogares
+dataset$id = paste0(dataset$DIRECTORIO,"-",dataset$SECUENCIA_P)
+
+#construcción de base de datos de recepción vacía
+dataset_2 = data.frame(levels(as.factor(dataset$id)))
+colnames(dataset_2) = "id"
+dataset_2$ingresos = NA
+
+hogares_id = levels(as.factor(dataset_2$id))
+
+# bucle para el cálculo de los ingresos para los hogares
+for (k in 1:length(hogares_id)) {
+  df = data.frame()
+  df = dataset %>% filter(id %in% hogares_id[k])
+  dataset_2[which(dataset_2$id == hogares_id[k]), 2] = sum(df$Ingresos)
+}
+
+colnames(dataset_2) = c("id", paste0("Dataset_",l))
+dataset_boxplot = merge(dataset_boxplot, dataset_2, by = "id")
+
+}
+
+
+```
+
+Nótese que, de acuerdo con la **Tabla 6**, la descripción general de los ingresos corrientes para los hogares no cambia significativamente según la base de datos considerada. La observación derivada de la **Tabla 6** se verifica en el diagrama de caja. La conclusión es la siguiente: para el propósito de analizar los ingresos corrientes para los hogares, siguiendo la información proporcionada por la GEIH (2022), la diferencia entre los datos de ingresos corrientes no-imputados e imputados no es significativa. El análisis posterior omite la implementación del método de imputación simple y, por simplicidad, omite los datos faltantes.
+
+```{r, echo=FALSE, warning=FALSE}
+
+kable(summary(dataset_boxplot[setdiff(colnames(dataset_boxplot), "id")]),
+      caption = "Tabla 6: Descripción general de los ingresos corrientes de los hogares según cada una de las seis bases de datos (la base de datos no-imputada y las cinco bases de datos imputadas)")
+
+boxplot_melt = melt(dataset_boxplot)
+
+boxplot(value~variable,
+        data=boxplot_melt,
+        main="Diagramas de caja según el conjunto de datos",
+        xlab="Ingreso corriente por hogar",
+        ylab=" Conjunto de datos",
+        col="white",
+        border="brown",
+        horizontal=TRUE,
+        outline = FALSE
+)
+```
+
+
+
+
+
+# Distribución de ingresos para la población de Cali, Valle del Cauca
+En lo sucesivo, se presenta un análisis general sobre la distribución de ingresos corrientes para los hogares de Cali, Valle del Cauca. La fuente de información corresponde a los datos de la Gran Encuesta Integrada de Hogares (GEIH) para el período de septiembre/2022. Se considera que los ingresos corrientes de los hogares están contenidos en las siguientes variables: ingreso laboral (módulo de **Ocupados**); ingresos de personas no-ocupadas (módulo de **No-ocupados**); ingresos por arriendos, ingresos por jubilaciones o ingresos por pensión alimenticia de paternidad (módulo de **Otros ingresos**). 
+
+```{r, echo=FALSE, warning=FALSE}
 # merge completo
 OCUP_Noocup <- merge(ocup,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
 OCUP_Noocup_OT_ING<- merge(OCUP_Noocup,Ot_ing, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)
@@ -95,29 +368,10 @@ dataset <-merge(OCUP_Noocup_OT_ING_CAR_GEN,Datos_vivi, by = c("DIRECTORIO", "SEC
 
 # cálculo de ingresos corrientes totales por persona
 dataset <- mutate(dataset, Ingresos = rowSums(dataset[ , c("INGLABO","P7422S1","P7500S1A1","P7500S2A1","P7500S3A1")], na.rm=TRUE))
+
 ```
 
-```{r, echo=TRUE, warning=FALSE}
-
-deciles_0 = quantile(dataset$INGLABO, probs = seq(.1,.9, by = .1), na.rm = TRUE)
-deciles_1 = quantile(complete(imputed_ocupados,1)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
-deciles_2 = quantile(complete(imputed_ocupados,2)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
-deciles_3 = quantile(complete(imputed_ocupados,3)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
-deciles_4 = quantile(complete(imputed_ocupados,4)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
-deciles_5 = quantile(complete(imputed_ocupados,5)[,2], probs = seq(.1,.9, by = .1), na.rm = TRUE)
-  
-data_frame_deciles = data.frame(deciles_0, deciles_1, deciles_2, deciles_3, deciles_4, deciles_5) 
-colnames(data_frame_deciles) = c("Original", "Imputada_1", "Imputada_2", "Imputada_3", "Imputada_4", "Imputada_5")
-kable(data_frame_deciles, caption = "Clasificación por deciles sobre los ingresos corrientes de las personas a partir de seis bases de datos (la base de datos original y cinco bases de datos imputados)")
-```
-
-
-# Distribución de ingresos para la población de Cali, Valle del Cauca
-En lo sucesivo, se presenta un análisis general sobre la distribución de ingresos corrientes para los hogares de Cali, Valle del Cauca. La fuente de información corresponde a los datos de la Gran Encuesta Integrada de Hogares (GEIH) para el período de septiembre/2022. Se considera que los ingresos corrientes de los hogares están contenidos en las siguientes variables: ingreso laboral (módulo de **Ocupados**); ingresos de personas no-ocupadas (módulo de **No-ocupados**); ingresos por arriendos, ingresos por jubilaciones o ingresos por pensión alimenticia de paternidad (módulo de **Otros ingresos**). La siguiente tabla presenta la información de ingresos diferenciados por hogares.
-
-
-
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 #construcción de una variable de identificación para los hogares
 dataset$id = paste0(dataset$DIRECTORIO,"-",dataset$SECUENCIA_P)
 
@@ -140,7 +394,7 @@ dataset_2 = merge(dataset_2, dataset[c("id", "P6008")], by ="id")
 dataset_2 = dataset_2[!duplicated(dataset_2),]
 ```
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # presentación de la tabla
 knitr::kable(dataset_2[1:10,], caption = "Ingresos corrientes y tamaño de los hogares de Cali, Valle del Cauca (septiembre/2022). Fuente: GEIH.",
              col.names = c("ID Hogar", "Ingreso corriente", "Tamaño del hogar"))
@@ -148,19 +402,19 @@ knitr::kable(dataset_2[1:10,], caption = "Ingresos corrientes y tamaño de los h
 
 La siguiente figura corresponde a la función de densidad empírica asociada a los ingresos corrientes de los hogares. Nótese que, puesto que se verifica que la distribución es leptocúrtica ($kurtosis > 3$) y asimétrica positiva ($skewness > 0$), los ingresos corrientes de los hogares no siguen una distribución norma
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # densidad empírica
 plot(density(dataset_2$ingresos), xlab = "Ingresos corrientes por hogares", main = "")
 ```
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # presentación del kurtosis y medida de asimetría
 kurtosis_skewness = data.frame(kurtosis(dataset_2$ingresos), skewness(dataset_2$ingresos))
 colnames(kurtosis_skewness) = c("Kurtosis", "Skewness")
 knitr::kable(kurtosis_skewness)
 ```
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # presentación de los deciles y tamaño de los hogares
 deciles = quantile(dataset_2$ingresos, probs = seq(.1, .9, by = .1))
 dataset_2 = dataset_2 %>% mutate(deciles = cut(ingresos, c(0, deciles, Inf), c("decil 1", "decil 2", "decil 3", "decil 4", "decil 5",
@@ -171,7 +425,7 @@ colnames(kurtosis_skewness) = c("Kurtosis", "Skewness")
 knitr::kable(kurtosis_skewness)
 ```
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # valores NA 
 na_values = dataset_2[is.na(dataset_2$deciles),]
 dataset_2_na = dataset_2[!is.na(dataset_2$deciles),]
@@ -184,7 +438,7 @@ knitr::kable(summary, caption = "Ingresos corrientes para los hogares de Cali (s
 
 La siguiente tabla presenta un contraste entre el tamaño y la distribución de los ingresos corrientes ---clasificada en deciles--- para los hogares de Cali en el período de septiembre/2022. Nótese que el ~87% de los hogares de Cali en la muestra se concentran en hogares unipersonales (~18%), hogares compuestos por dos (~27%), tres (~24%) y cuatro personas (~18%).Para el análisis subsiguiente se considera la composición de los hogares compuestos, principalmente, por dos, tres y cuatro personas.
 
-```{r, echo=TRUE, warning=FALSE}
+```{r, echo=FALSE, warning=FALSE}
 # tabla: deciles de ingresos vs tamaño del hogar
 table_1 = as.data.frame(table(dataset_2_na$deciles, dataset_2_na$P6008))
 colnames(table_1) = c("Decil", "Tamaño_hogar", "Freq")
@@ -202,7 +456,8 @@ knitr::kable(table_1_unmelt, caption = "Tamaño del hogar y deciles asociados a 
 ```
 
 
-```{r, echo=TRUE, warning=FALSE}
+
+```{r, echo=FALSE, warning=FALSE}
 # análisis para hogares n-personales (n =2,3,4)
 Grupo = c("[1,4)", "[4,9)", "[9,14)", "[14,19)", "[19,31)", "[31,51)",  "[51,70)",  "[70,Inf)")
 table_2_def = data.frame(Grupo)
@@ -224,5 +479,15 @@ table_2_def = merge(table_2_def, table_2_unmelt, by = "Grupo")
 kable(table_2_def, caption = "Composición para tres tamaños de hogares en Cali: hogares conformados por dos, tres y cuatro personas. Fuente: GEIH")
 
 ```
+
+# Análisis por estratificación socioeconómica
+
+
+
+
+# Proporción del gasto en alimentación para los hogares de Cali, Valle del Cauca
+
+
+
 
 
