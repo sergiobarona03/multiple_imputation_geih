@@ -1,0 +1,330 @@
+---
+title: 'Segundo análisis general: distribución de ingresos para la población de Cali, Valle
+  del Cauca'
+author: "Proyecto CIAT - Banco de la República"
+date: '2022-11-11'
+output: html_document
+---
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
+library(readxl)
+library(tidyverse)
+library(knitr)
+library(moments)
+library(maditr)
+library(mice)
+library(VIM)
+library(dplyr)
+library(finalfit)
+```
+
+
+# Método de imputación sobre los ingresos corrientes en la Gran Encuestra Integrada de Hogares (GEIH) 2022
+
+# Metodología: imputación múltiple mediante coincidencia de media predictiva
+Por definición, la imputación múltiple corresponde a un método de imputación fundamentado en la siguiente hipótesis de Rubin (1987): puesto que, dada la incertidumbre, no parece apropiado imputar un único valor a cada dato faltante, la imputación múltiple propone la construcción de más de un valor imputado. En general, se verifica que un número reducido de imputaciones múltiples ---cinco, por ejemplo--- son suficientes para reflejar la incertidumbre del dato faltante. 
+
+La coincidencia de media predictiva es una clase de imputación múltiple, más precisamente, un ejemplo del método hot-deck según el cual los valores faltantes son imputados a partir de una unidad que, según un criterio de distancia, se asemeja a la unidad del dato faltante. Para cada dato faltante, el criterio de distancia permite seleccionar un conjunto de unidades similares (unidades donantes), de donde se desprende la unidad cuyo valor observado es usado como valor imputado. Esto significa, entre otras cosas, que el conjunto de valores imputados está determinado estrictamente por el conjunto de valores efectivamente observados. Como observa van Bureen (2006), seleccionar un conjunto de cinco o diez donantes presenta, en general, los mejores resultados.
+
+En el contexto del método de coincidencia de media productiva, el criterio de distancia viene dada por la diferencia entre la media predictiva de los datos observados y la media predictiva de los datos no observados. Formalmente, supóngase un caso de imputación univariada en que, dado un conjunto de $n$ datos, existe $n_{1}$ datos faltantes y $n_{2}$ datos efectivamente observados. Sea $X \in \mathbb{R}^{n \times k}$ la matriz de datos para $k$ variables explicativas. La matriz de covariables se puede expresar como $X = (X^{obs}, X^{mis})$ donde $X^{obs} \in \mathbb{R}^{n_{1} \times k}$ es la matriz de covariables para las $n_{1}$ filas observados; y $X^{mis} \in \mathbb{R}^{n_{2} \times k}$, la matriz de covariables para las $n_{2}$ filas perdidas. Así, $\hat{\mathbf{y}}^{obs} = (y_{1}, \ldots, y_{n_{1}})$ es el vector de valores predichos para las $n_{1}$ filas observadas ---que es generalmente estimado según un modelo clásico de regresión lineal simple con estimadores MCO o estimadores de máxima verosimilitud tal que $\hat{\mathbf{y}}^{obs} = X^{obs}\hat{\mathbf{\beta_{OLS}}}$----; $\dot{\mathbf{y}}^{mis} = (y_{1}, \ldots, y_{n_{2}})$, el vector de valores predichos para las $n_{2}$ filas perdidas ---que es generalmente estimado mediante un enfoque bayesiano---.
+
+ Nótese que, para todo $i \in [1, \ n_{1}] \subset \mathbb{Z}$, $\hat{y_{i}}$ es la media predictiva para el $i$-ésimo dato observado; y, para todo $i \in [1, \ n_{1}] \subset \mathbb{Z}$, $\dot{y_{j}}$ es la media predictiva para el $j$-ésimo dato faltante. La distancia entre ambas medias predictivas viene dada por
+$$
+|\hat{y_{i}} – \dot{y_{j}}|
+$$
+
+Siguiendo a Andridge & Little (2010), se definen los siguientes cuatro métodos para la selección del conjunto de candidatos para unidades donantes:
+1.	Dado un umbral $\eta \in \mathbb{R}$, el conjunto de donantes candidatos viene dado por 
+$$
+\{\hat{y_{i}} \in  \hat{\mathbf{y}}^{obs} | \ \ \  \hat{y_{i}} – \dot{y_{j}}| \leq \eta\}
+$$
+
+2.	La unidad donante corresponde corresponde a la unidad más cercana, la cual satisface que 
+$$
+\min_{i \in [1, \ n_{1}] \subset \mathbb{Z}}{|\hat{y_{i}} – \dot{y_{j}}|}
+$$
+
+3.	Para $\delta \in \mathbb{Z}_{++}$, se seleccionan las primeras $\delta$ distancias $|\hat{y_{i}} – \dot{y_{j}}|$ más pequeñas.
+
+4.	Seleccionar un donante único cuya probabilidad está determinada por la distancia $|\hat{y_{i}} – \dot{y_{j}}|$.
+
+En lo sucesivo, se presenta una aplicación del método de coincidencia por media predictiva para la imputación de los ingresos corrientes en la Gran Encuesta Integrada de Hogares (GEIH) del 2022. La muestra corresponde a la ciudad de Cali, Valle del Cauca, para el período septiembre/2022. Se considera que los ingresos corrientes de los individuos están contenidos en las siguientes variables: ingreso laboral (módulo de **Ocupados**); ingresos de personas no-ocupadas (módulo de **No-ocupados**); ingresos por arriendos, ingresos por jubilaciones o ingresos por pensión alimenticia de paternidad (módulo de **Otros ingresos**). Siguiendo a Restrepo y Marín (2012), el conjunto de variables explicativas viene determinado por la especificación de la ecuación de Mincer (1974). Se considera la edad, la experiencia, el sexo, el nivel de escolaridad y las horas trabajadas como variables. La siguiente tabla corresponde a la base de datos a imputar: 
+
+
+```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
+# cargar base de datos para imputar
+setwd("/Users/sergiobarona03/Desktop/multiple_imputation_geih")
+library(here)
+source(here::here("script_asequibilidad/", "33-tercera-aprox.R"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+knitr::kable(dataset_imputar[1:15,], caption = "Tabla 1: Base de datos para la implementación del método de coincidencia de medias predictivas según la especificación minceriana. Fuente: GEIH (2022).", col.names = c("ID", "Ingresos corrientes", "Edad", "Sexo", "Escolaridad", "Horas trabajadas", "Edad^{2}"))
+```
+
+La variable *Horas trabajas* corresponde al número de horas trabajadas la semana anterior. Nótese que la edad y el cuadrado de la edad es considerada como una variable *proxy*. La **Tabla 2** expresa la descripción general de las variables categóricas; y la **Tabla 3**, la descripción general de las variables numéricas.
+
+```{r, echo=FALSE, warning=FALSE}
+#descripción
+knitr::kable(as.matrix(summary(dataset_imputar[c("sexo", "estudio")])),
+             col.names = c("Sexo", "Escolaridad"), 
+             caption = "Tabla 2: Descripción general de las variables categóricas")
+
+knitr::kable(as.matrix(summary(dataset_imputar[c("ing", "edad", "horas")])),
+             col.names = c("Ingresos corrientes", "Edad", "Horas trabajadas"),
+             caption = "Tabla 3: Descripción general de las variables numérica")
+```
+
+# Datos faltantes
+La siguiente figura representa los patrones de datos faltantes entre la variable dependiente ---a saber, los ingresos corrientes--- y el conjunto de covariables definido. Nótese que la muestra está compuesta por 1352, de las cuales sólo el ~2.6% de las observaciones corresponden a datos faltantes. Adicionalmente, nótese que la totalidad de los datos faltantes están concentrados en la variable *Ingresos corrientes*. Esto permite la implementación de un método de imputación múltiple univariado en que los *Ingresos corrientes* corresponden a la variable de interés. 
+
+```{r, echo=FALSE, warning=FALSE}
+# análisis de datos faltantes
+dataset_imputar_pr = dataset_imputar
+colnames(dataset_imputar_pr) = c("ID", "Ingresos corrientes", "Edad", "Sexo", 
+                       "Escolaridad", "Horas trabajadas", "Edad2")
+
+explanatory <- c("Edad", "Sexo", 
+                 "Escolaridad",  
+                 "Horas trabajadas", "Edad2")
+
+dependent <- "Ingresos corrientes"
+
+dataset_imputar_pr %>% 
+  missing_pattern(dependent, explanatory)
+```
+
+# Aplicación: imputación múltiple univariada sobre ingresos corrientes en la GEIH (2022)
+Metodológicamente, se propone la imputación de los datos faltantes de la variable de ingresos corrientes por medio de un método de imputación múltiple univariado, más precisamente, el método de coincidencia de medias predictivas en su forma univariada (véase *supra*). La matriz de covariables está determinada por el conjunto de variables explicativas viene determinado por la especificación de la ecuación de Mincer (1974). Por hipótesis, para cada dato faltante, el número de donantes candidatos es $d = 5$; y, siguiendo a van Bureen (2006), se determinan $m = 5$ imputaciones, las cuales corresponden a cinco bases de datos distintas con valores imputados. Esto implica que el método de selección de la unidad donante corresponde, según la clasificación de Andridge & Little (2010), al método (3). La **Tabla 4** presenta, diferenciados según cada una de las cinco bases de datos, los resultados de la imputación.
+
+
+```{r, echo=FALSE, warning=FALSE}
+
+knitr::kable(imputed_ocupados$imp$ing, caption = "Tabla 4: Imputación de ingresos corrientes para los individuos diferenciada según la base de datos. Método: método de imputación múltiple univariada según coincidencia de la media predictiva")
+
+```
+
+En lo sucesivo, a partir de las seis bases de datos derivadas ---a saber, la base de datos original y las cinco bases de datos con valores imputados---, se presenta un ejercicio de agregación. Los ingresos corrientes individuales, siguiendo la codificación de la GEIH, son agregados a nivel de hogares. La **Tabla 5** presenta la distribución por deciles de los ingresos corrientes para los hogares derivada de cada una de las seis bases de datos. 
+
+```{r, echo=FALSE, warning=FALSE}
+knitr::kable(deciles_imputacion, caption = "Tabla 5: distribución por deciles para los ingresos corrientes de los hogares según cada bases de datos (la base de datos original y las cinco bases de datos con valores imputados)")
+```
+
+
+Nótese que, de acuerdo con la **Tabla 6**, la descripción general de los ingresos corrientes para los hogares no cambia significativamente según la base de datos considerada. La observación derivada de la **Tabla 6** se verifica en el diagrama de caja. La conclusión es la siguiente: para el propósito de analizar los ingresos corrientes para los hogares, siguiendo la información proporcionada por la GEIH (2022), la diferencia entre los datos de ingresos corrientes no-imputados e imputados no es significativa. El análisis posterior omite la implementación del método de imputación simple y, por simplicidad, omite los datos faltantes.
+
+```{r, echo=FALSE, warning=FALSE}
+kable(summary(dataset_boxplot[setdiff(colnames(dataset_boxplot), "id")]),
+      caption = "Tabla 6: Descripción general de los ingresos corrientes de los hogares según cada una de las seis bases de datos (la base de datos no-imputada y las cinco bases de datos imputadas)")
+
+boxplot_melt = melt(dataset_boxplot)
+
+boxplot(value~variable,
+        data=boxplot_melt,
+        main="Diagramas de caja según el conjunto de datos",
+        xlab="Ingreso corriente por hogar",
+        ylab=" Conjunto de datos",
+        col="white",
+        border="brown",
+        horizontal=TRUE,
+        outline = FALSE
+)
+```
+
+
+
+
+
+# Distribución de ingresos para la población de Cali, Valle del Cauca
+En lo sucesivo, se presenta un análisis general sobre la distribución de ingresos corrientes para los hogares de Cali, Valle del Cauca. La fuente de información corresponde a los datos de la Gran Encuesta Integrada de Hogares (GEIH) para el período de septiembre/2022. Se considera que los ingresos corrientes de los hogares están contenidos en las siguientes variables: ingreso laboral (módulo de **Ocupados**); ingresos de personas no-ocupadas (módulo de **No-ocupados**); ingresos por arriendos, ingresos por jubilaciones o ingresos por pensión alimenticia de paternidad (módulo de **Otros ingresos**). 
+
+
+```{r, echo=FALSE, warning=FALSE}
+# presentación de la tabla
+knitr::kable(dataset_2[1:10,1:3], caption = "Tabla 7: Ingresos corrientes y tamaño de los hogares de Cali, Valle del Cauca (septiembre/2022). Fuente: GEIH.",
+             col.names = c("ID Hogar", "Ingreso corriente", "Tamaño del hogar"))
+```
+
+La siguiente figura corresponde a la función de densidad empírica asociada a los ingresos corrientes de los hogares. Nótese que, puesto que se verifica que la distribución es leptocúrtica ($kurtosis > 3$) y asimétrica positiva ($skewness > 0$), los ingresos corrientes de los hogares no siguen una distribución norma
+
+```{r, echo=FALSE, warning=FALSE}
+# densidad empírica
+plot(density(dataset_2$ingresos), xlab = "Ingresos corrientes por hogares", main = "")
+```
+
+```{r, echo=FALSE, warning=FALSE}
+# presentación del kurtosis y medida de asimetría
+kurtosis_skewness = data.frame(kurtosis(dataset_2$ingresos), skewness(dataset_2$ingresos))
+colnames(kurtosis_skewness) = c("Kurtosis", "Skewness")
+knitr::kable(kurtosis_skewness)
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE}
+#summary
+summary = as.data.frame(matrix(c(as.numeric(deciles), max(dataset_2$ingresos), mean(dataset_2$ingresos)),nrow = 1))
+colnames(summary) = c("decil 1", "decil 2", "decil 3", "decil 4", "mediana", "decil 6", "decil 7", "decil 8", "decil 9", "máx.", "Media")
+knitr::kable(summary, caption = "Ingresos corrientes para los hogares de Cali (septiembre/2022). Fuente: GEIH")
+```
+
+La siguiente tabla presenta un contraste entre el tamaño y la distribución de los ingresos corrientes ---clasificada en deciles--- para los hogares de Cali en el período de septiembre/2022. Nótese que el ~87% de los hogares de Cali en la muestra se concentran en hogares unipersonales (~18%), hogares compuestos por dos (~27%), tres (~24%) y cuatro personas (~18%).Para el análisis subsiguiente se considera la composición de los hogares compuestos, principalmente, por dos, tres y cuatro personas.
+
+```{r, echo=FALSE, warning=FALSE}
+
+
+knitr::kable(table_1_unmelt, caption = "Tabla 8: Tamaño del hogar y deciles asociados a la distribución de los ingresos corrientes en los hogares de Cali (septiembre/2022). Fuente: GEIH", col.names = c("Tamaño del hogar", colnames(table_1_unmelt)[2:ncol(table_1_unmelt)]))
+```
+
+
+
+```{r, echo=FALSE, warning=FALSE}
+kable(table_2_def, caption = "Tabla 9: Composición para tres tamaños de hogares en Cali: hogares conformados por dos, tres y cuatro personas. Fuente: GEIH")
+
+```
+
+# Dos aproximaciones para la evaluación de la asequibilidad a tres tipos de dietas en la población Cali, Valle del Cauca
+
+Con el propósito de determinar la asequibilidad a tres tipos de dieta ---a saber, una dieta suficiente en energía, una dieta nutricionalmente adecuada y una dieta saludable--- en la población urbana de Cali, se proponen dos aproximaciones generales. La **primera aproximación** consiste en examinar la asequibilidad a cada dieta para múltiples tipos de hogares, cuyo tamaño y composición están determinados por la **Tabla 8** y **Tabla 9**. Esta aproximación determina, en términos generales, la ubicación en la distribución de ingresos de los hogares que pueden permitirse cada tipo de dieta. En contraste, la **segunda aproximación** corresponde a un enfoque de líneas de pobreza, de donde se desprende el cálculo de la tasa de incidencia y la brecha para cada línea definida. Nótese que, a diferencia de la **primera aproximación**, la **segunda aproximación** presupone la construcción de un único hogar representativo. 
+
+## Primera aproximación: múltiples tipos de hogares
+Como se verifica en la **Tabla 8**, el ~87% de los hogares de Cali en la muestra se concentran en hogares unipersonales (~18%), hogares compuestos por dos (~27%), tres (~24%) y cuatro personas (~18%). Los tipos de hogares definidos se restringen, en consecuencia, a hogares compuesto por dos, tres y cuatro. A partir de la **Tabla 9**, se determinan dos tipos de hogares compuestos por dos personas: primero, un hogar compuesto por un hombre y una mujer moderadamente activos de entre 31 y 50 años; y, en segundo lugar, un hogar compuesto por un hombre y una mujer moderadamente activos de entre 51 y 70 años. Para el caso de hogares compuestos por tres personas, se consideran cuatro tipos de hogares: primero, un hogar compuesto por un niño de entre 9 y 13 años, y un hombre y una mujer moderadamente activos de entre 31 y 50 años; segundo, un hogar compuesto por un niña de entre 9 y 13 años, y un hombre y una mujer moderadamente activos de entre 31 y 50 años; tercero, un hogar compuesto por un adolescente de entre 14 y 18 años, y un hombre y una mujer moderadamente activos de entre 51 y 70 años; cuarto, una adolescente de entre 14 y 18 años, y un hombre y una mujer moderadamente activos de entre 51 y 70 años. Finalmente, considérese los siguientes tres tipos de hogares representativos: primero, un hogar compuesto por un niño y una niña de entre 9 y 13 años, y un hombre y una mujer moderadamente activa de entre 31 y 50 años; segundo, un hogar compuesto por un niño de entre 9 y 13 años, una mujer y un hombre moderadamente activo de entre 31 y 50 años, y un anciano mayor de 70 años; tercero, un hogar compuesto por una niña de entre 9 y 13 años, una mujer y un hombre moderadamente activo de entre 31 y 50 años, y un anciano mayor de 70 años. La **Tabla 10** representa los tipos de hogares seleccionados:
+
+```{r, echo=FALSE, warning=FALSE}
+kable(tipo_hogares[c("hogar","persona", "sexo", "grupo_demo")], caption = "Tabla 10: Composición de los tipos de hogares considerados", col.names = c("Hogar", "Miembro", "Sexo", "Grupo de edad"))
+```
+
+
+Supóngase que los hogares ubicados en el primer y segundo decil gastan en alimentación el 60% de sus ingresos; los hogares en el tercer, cuarto y quinto decil, el 50% de sus ingresos; los hogares en el sexto, séptimo y octavo decil, 40%; y los hogares en el noveno y último decil, el 20%. La **Tabla 11** muestra, en primer lugar, la proporción, según el nivel de ingresos, del gasto total en alimentación; y, en segundo lugar, la distribución en deciles del gasto en alimentación para los hogares
+
+```{r, echo=FALSE, warning=FALSE}
+deciles_gasto_table = deciles_gasto
+deciles_gasto_table$share = deciles_gasto_table$share*100
+kable(deciles_gasto_table, caption = "Tabla 11: gasto total en alimentación diferenciado por deciles para los hogares. Fuente: GEIH, 2022; ENPH, 2017", col.names = c("Decil", "Proporción (%)", "Ingresos corrientes", "Gasto en alimentación"))
+```
+De acuerdo con la metodología sugerida para la investigación (véase *Documento de trabajo 1*), la estimación del costo mínimo de la dieta de subsistencia y el costo mínimo de la dieta nutricionalmente adecuada fue estimado, para cada grupo demográfico, a partir de un modelo de programación lineal. La estimación del costo mínimo de la dieta saludable ---o dieta recomendada--- se deriva de una metodología fundamentada, principalmente, en las recomendación proporcionadas por las Guías Alimentarias Basadas en Alimentos (GABAS) para Colombia. En lo sucesivo, se introduce un análisis de asequibilidad diferenciado según cada tipo de dieta.
+
+### Dieta suficiente en energía
+La **Tabla 12** presenta la estimación del costo mínimo y composición de una dieta de suficiente en energía para la población urbana de Cali. La **Tabla 13** presenta, con base en los tipos de hogares definidos, el costo mínimo estimado de una dieta suficiente en energía. Los resultados generales son los siguientes:
+
+```{r, echo=FALSE, warning=FALSE}
+dieta_1_unmelt = dieta_1[c("grupo_demo", "sexo", "costo_dia")]
+dieta_1_unmelt = dcast(dieta_1, formula = grupo_demo~sexo, fun.aggregate = sum, value.var = "costo_dia")
+  
+kable(dieta_1_unmelt, caption = "Tabla 12: costo mínimo estimado de un dieta de subsistencia para cada grupo demográfico. Fuente: Documento de trabajo 1.", col.names = c("Grupo demográfico", "Masculino", "Femenino"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+
+kable(dieta_1_hogar, caption = "Tabla 12: costo mínimo estimado de un dieta de subsistencia para cada tipo de hogar. Fuente: Documento de trabajo 1.")
+```
+
+```{r, echo=FALSE, warning=FALSE}
+kable(aprox_1_dieta_1, caption = "Tabla 13: asequibilidad a una dieta de subsistencia diferenciada por tipos de hogar para la población urbana de Cali, Valle del Cauca")
+```
+### Dieta nutricionalmente adecuada
+```{r, echo=FALSE, warning=FALSE}
+dieta_2_unmelt = dieta_2[c("grupo_demo", "sexo", "costo_dia")]
+dieta_2_unmelt = dcast(dieta_2, formula = grupo_demo~sexo, fun.aggregate = sum, value.var = "costo_dia")
+  
+kable(dieta_2_unmelt, caption = "Tabla 15: costo mínimo estimado de un dieta nutricionalmente adecuada para cada grupo demográfico. Fuente: Documento de trabajo 1.", col.names = c("Grupo demográfico", "Masculino", "Femenino"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+kable(dieta_2_hogar, caption = "Tabla 16: costo mínimo estimado de un dieta nutricionalmente adecuada para cada tipo de hogar. Fuente: Documento de trabajo 1.")
+```
+
+```{r, echo=FALSE, warning=FALSE}
+library(kableExtra)
+
+kable(aprox_1_dieta_2, caption = "Tabla 17: asequibilidad a una dieta nutricionalmente adecuada diferenciada por tipos de hogar para la población urbana de Cali, Valle del Cauca") 
+```
+
+### Dieta saludable o recomendada
+```{r, echo=FALSE, warning=FALSE}
+dieta_3_unmelt = dieta_3[c("grupo_demo", "sexo", "costo_dia")]
+dieta_3_unmelt = dcast(dieta_3, formula = grupo_demo~sexo, fun.aggregate = sum, value.var = "costo_dia")
+  
+kable(dieta_3_unmelt, caption = "Tabla 18: costo mínimo estimado de un dieta saludable o recomendada para cada grupo demográfico. Fuente: Documento de trabajo 1.", col.names = c("Grupo demográfico", "Masculino", "Femenino"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+kable(dieta_3_hogar, caption = "Tabla 19: costo mínimo estimado de un dieta saludable para cada tipo de hogar. Fuente: Documento de trabajo 1.")
+```
+
+```{r, echo=FALSE, warning=FALSE}
+kable(aprox_1_dieta_3, caption = "Tabla 20: asequibilidad a una dieta saludable diferenciada por tipos de hogar para la población urbana de Cali, Valle del Cauca")
+```
+
+## Segunda aproximación: líneas de pobreza 
+
+El propósito de la segunda aproximación es el siguiente: estimar la proporción de los hogares que, teniendo en consideración la población urbana de Cali, no se puede permitir, ya sea una dieta suficiente en energía, una dieta nutricionalmente adecuada o una dieta recomendada. A partir de la información de la GEIH para septiembre/2022, se construye un hogar representativo para la población urbana de Cali (véase **Tabla 21**). Dada la composición del hogar representativo, el costo per cápita para cada tipo de dieta es comparado con el gasto per cápita en alimentación para cada uno de los hogares. En consecuencia, la proporción de los hogares que no se pueden permitir cada tipo de dieta corresponde a la proporción de hogares cuyo gasto per cápita en alimentación es inferior al costo per cápita de la dieta (Geniez et al., 2014; Dizon, Herforth & Wang, 2019; WFP, 2019). 
+
+```{r, echo=FALSE, warning=FALSE}
+kable(model_household[c("persona", "sexo", "grupo_demo")], caption = "Tabla 21: composición del hogar representativo para la población urbana de Cali, Valle del Cauca", col.names = c("Miembro", "Sexo", "Grupo de edad"))
+```
+
+La aproximación descrita guarda una relación evidente con el enfoque de líneas de pobreza presentado por Geniez et al. (2014). Adoptando su terminología, un hogar está en situación de pobreza alimentaria si no puede permitirse una dieta que proporcione el nivel suficiente de calorías; mientras que un hogar está en pobreza nutricional si no puede permitirse una dieta que satisfaga los niveles adecuados de energía y nutrientes. Esto implica, *inter alia*, que la línea de pobreza alimentaria y la línea de pobreza nutricional vienen dadas, respectivamente, por el costo per cápita de la dieta de subsistencia y la dieta nutricionalmente adecuada para el hogar representativo. (Nótese que, en el contexto de un enfoque per cápita, la proporción de personas que no se pueden permitir una dieta de subsistencia ---o una dieta nutricionalmente adecuada--- no es sino el cálculo de la tasa de pobreza alimentaria ---o pobreza nutricional---. )
+
+###  Resultados por hogares
+
+Las **Tabla 22** - **24** presenta, para el caso cada tipo de dieta, el costo individual y el costo per cápita. La gráfica muestra la comparación entre el costo mínimo per cápita para cada tipo de dieta ---i.e. la línea de pobreza alimentaria, la línea de pobreza nutricional y la línea asociada a la dieta saludable--- y la distribución de los ingresos para los hogares. Finalmente, la **Tabla 25** presenta tres resultados relevantes: uno, la proporción de hogares que no se pueden permitir cada tipo de dieta; dos, el promedio de las brechas como proporción de la línea de pobreza; tres, el promedio ponderado ---donde la ponderación corresponde a la brecha relativa--- de las brechas como proporción de la línea de pobreza.
+
+```{r, echo=FALSE, warning=FALSE}
+kable(model_dieta_1[c("persona", "sexo", "grupo_demo", "costo_dia", "per_capita")], caption = "Tabla 22: costo individual, costo per cápita y costo total de una dieta de subsistencia para el hogar representativo", col.names = c("Persona", "Sexo", "Grupo de edad", "Costo diario", "Costo per capita"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+kable(model_dieta_2[c("persona", "sexo", "grupo_demo", "costo_dia", "per_capita")], caption = "Tabla 23: costo individual, costo per cápita y costo total de una dieta nutricionalmente adecuada para el hogar representativo", col.names = c("Persona", "Sexo", "Grupo de edad", "Costo diario", "Costo per capita"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+kable(model_dieta_3[c("persona", "sexo", "grupo_demo", "costo_dia", "per_capita")], caption = "Tabla 24: costo individual, costo per cápita y costo total de una dieta saludable para el hogar representativo", col.names = c("Persona", "Sexo", "Grupo de edad", "Costo diario", "Costo per capita"))
+```
+
+
+```{r, echo=FALSE, warning=FALSE}
+kable(household_poverty_outcome, caption = "Tabla 25: Resultados generales de la segunda aproximación (unidad = hogares)", col.names = c("Tipo de dieta", "Tasa (%)", "Brecha", "Severidad"))
+```
+
+```{r, echo=FALSE, warning=FALSE}
+
+hist(poverty_dieta_3$per_capita_dia, breaks = 200,
+     xlim = c(0, quantile(poverty_dieta_3$per_capita_dia, probs = 0.95)),
+     main = "Costo diario per cápita para cada tipo de dieta",
+     xlab = "Gasto diario per cápita en alimentación")
+abline(v = c(mean(model_dieta_1$per_capita),
+             mean(model_dieta_2$per_capita),
+             mean(model_dieta_3$per_capita)), col = c("red", "blue", "green"))
+```
+
+
+### Resultados por individuos
+Los mismos resultados se presentan para el caso según el cual los individuos son la unidad de estudio. Nótese que la proporción de hogares en pobreza alimentaria puede variar según el tamaño predominante de los hogares. 
+
+```{r, echo=FALSE, warning=FALSE}
+kable(ind_poverty_outcome, caption = "Tabla 26: Resultados generales de la segunda aproximación (unidad = individuos)", col.names = c("Tipo de dieta", "Tasa (%)", "Brecha", "Severidad"))
+```
+
+## Tercera aproximación: enfoque diferenciado según grupos demográficos
+
+La propuesta de Schneider et al. (2021) corresponde a un enfoque diferenciado para la estimación de una cota inferior y una cota superior del costo mínimo de una dieta nutricionalmente adecuada. La aproximación propone dos enfoques para calcular una dieta de costo mínimo nutricionalmente adecuada para los hogares rurales en Malawi: primero, un enfoque de dietas individualizadas que consiste en calcular, para cada miembro del hogar, la dieta de costo mínimo nutricionalmente adecuada que satisfaga los requerimientos individuales de nutrientes y energía; segundo, un enfoque de dietas compartidas que consiste en estimar un patrón de dieta compartida para un hogar completo. En el primer enfoque, el costo mínimo de la dieta para el hogar corresponde a la suma del costo mínimo de una dieta nutricionalmente adecuada para cada uno de los miembros del hogar; mientras que, en el enfoque de dietas compartidas, siguiendo el principio maximin de Rawls, el costo mínimo de la dieta para el hogar corresponde al costo mínimo de una dieta nutricionalmente adecuada que satisfaga los requerimientos del miembro más necesitado. 
+
+```{r, echo=FALSE, warning=FALSE}
+household_schneider_outcome$Tasa = household_schneider_outcome$Tasa*100
+
+kable(household_schneider_outcome, caption = "Tabla 27: Resultados generales de la tercera aproximación (unidad = hogares)", col.names = c("Tipo de dieta", "Tasa (%)"))
+```
+
+
+En términos generales, el objetivo de la investigación radia en determinar si, a lo largo del año, los distritos rurales en Malawi pueden proporcionar patrones de dieta que, para cada miembro de los hogares, satisfagan los requerimientos nutricionales a un costo asequible. En una línea similar, esta tercera aproximación consiste en determinar, a partir de un enfoque diferenciado, la proporción de hogares que pueden permitirse cada tipo de dieta. De acuerdo con su sexo y edad, se determina el costo mínimo de cada tipo dieta para los miembros de cada hogar. Siguiendo el enfoque de dietas individualizadas de Schneider et al. (2021), se compara el costo mínimo diario de la dieta para el hogar ---que viene dada por la suma de los costos individuales--- con el gasto diario del hogar en alimentación. Con todo, la proporción de hogares que no pueden acceder a cada tipo de dieta corresponde a la proporción de hogares cuyo costo diario de la dieta supera el gasto diario del hogar en alimentación. (Esto constituye, en el sentido de Schneider et al. (2021), un análisis de asequibilidad sobre el límite inferior del costo mínimo de una dieta).
+
+
+
+
+
+
+
+
+
+

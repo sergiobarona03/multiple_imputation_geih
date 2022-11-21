@@ -1,7 +1,7 @@
 ---
 title: 'Análisis general: distribución de ingresos para la población de Cali, Valle
   del Cauca'
-author: "Proyecto de movilidad"
+author: "Proyecto CIAT - Banco de la República"
 date: '2022-11-11'
 output: html_document
 ---
