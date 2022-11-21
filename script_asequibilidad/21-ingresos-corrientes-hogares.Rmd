@@ -53,7 +53,7 @@ En lo sucesivo, se presenta una aplicación del método de coincidencia por medi
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
 # cargar base de datos para imputar
-setwd("/Users/sergiobarona03/Desktop/multiple_imputation_geih")
+setwd("C:/Users/lea8/Desktop/multiple_imputation_geih")
 library(here)
 source(here::here("script_asequibilidad/", "33-tercera-aprox.R"))
 ```
@@ -311,8 +311,6 @@ kable(ind_poverty_outcome, caption = "Tabla 26: Resultados generales de la segun
 La propuesta de Schneider et al. (2021) corresponde a un enfoque diferenciado para la estimación de una cota inferior y una cota superior del costo mínimo de una dieta nutricionalmente adecuada. La aproximación propone dos enfoques para calcular una dieta de costo mínimo nutricionalmente adecuada para los hogares rurales en Malawi: primero, un enfoque de dietas individualizadas que consiste en calcular, para cada miembro del hogar, la dieta de costo mínimo nutricionalmente adecuada que satisfaga los requerimientos individuales de nutrientes y energía; segundo, un enfoque de dietas compartidas que consiste en estimar un patrón de dieta compartida para un hogar completo. En el primer enfoque, el costo mínimo de la dieta para el hogar corresponde a la suma del costo mínimo de una dieta nutricionalmente adecuada para cada uno de los miembros del hogar; mientras que, en el enfoque de dietas compartidas, siguiendo el principio maximin de Rawls, el costo mínimo de la dieta para el hogar corresponde al costo mínimo de una dieta nutricionalmente adecuada que satisfaga los requerimientos del miembro más necesitado. 
 
 ```{r, echo=FALSE, warning=FALSE}
-household_schneider_outcome$Tasa = household_schneider_outcome$Tasa*100
-
 kable(household_schneider_outcome, caption = "Tabla 27: Resultados generales de la tercera aproximación (unidad = hogares)", col.names = c("Tipo de dieta", "Tasa (%)"))
 ```
 

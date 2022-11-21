@@ -52,23 +52,23 @@ for (k in 1:nrow(dieta_1_aprox_3)) {
   dieta_1_aprox_3_hogar$costo_diario[id_x] = sum(df$costo_dia)
 }
 
-# datos sobre gasto per capita en alimentacion
+# datos sobre gasto por hogar en alimentacion
 
 dieta_1_aprox_3_hogar_gasto = merge(dieta_1_aprox_3_hogar, 
-                                    dataset_2_na[c("id", "per_capita")],
+                                    dataset_2_na[c("id", "ingreso_alimentos", "FEX_C18")],
                                     by = "id", all.y = FALSE, all.x = FALSE)
 
 # provisionalmente: eliminar hogares con recien nacidos
 dieta_1_aprox_3_hogar_gasto = dieta_1_aprox_3_hogar_gasto[!is.na(dieta_1_aprox_3_hogar_gasto$costo_diario),]
 
-# construir per capita diario
-dieta_1_aprox_3_hogar_gasto$per_capita_dia = dieta_1_aprox_3_hogar_gasto$per_capita/30
+# construir gasto diario
+dieta_1_aprox_3_hogar_gasto$gasto_dia = dieta_1_aprox_3_hogar_gasto$ingreso_alimentos/30
 
 # crear la dummy para construir la proporción
 dieta_1_aprox_3_hogar_gasto$dummy = NA
 
 for (k in 1:nrow(dieta_1_aprox_3_hogar_gasto)) {
-  if (dieta_1_aprox_3_hogar_gasto$per_capita_dia[k] < dieta_1_aprox_3_hogar_gasto$costo_diario[k]) {
+  if (dieta_1_aprox_3_hogar_gasto$gasto_dia[k] < dieta_1_aprox_3_hogar_gasto$costo_diario[k]) {
     dieta_1_aprox_3_hogar_gasto$dummy[k] = 1
   } else {
     dieta_1_aprox_3_hogar_gasto$dummy[k] = 0
@@ -76,17 +76,19 @@ for (k in 1:nrow(dieta_1_aprox_3_hogar_gasto)) {
 }
 
 # calcular proporcion de hogares por debajo de la linea
+N = sum(dieta_1_aprox_3_hogar_gasto$FEX_C18)
+
 schneider_outcome_1 = as.data.frame(matrix(nrow = 1, ncol=2))
 colnames(schneider_outcome_1) = c("Tipo", "Tasa")
 schneider_outcome_1$Tipo = "Dieta de subsistencia"
-schneider_outcome_1$Tasa = sum(dieta_1_aprox_3_hogar_gasto$dummy)/nrow(dieta_1_aprox_3_hogar_gasto)
+schneider_outcome_1$Tasa = (sum(dieta_1_aprox_3_hogar_gasto$dummy*dieta_1_aprox_3_hogar_gasto$FEX_C18)/N)*100
 
 
 #####################################
 ## Dieta nutricionalmente adecuada ##
 #####################################
 
-# calcular el costo diario de la dieta nutritiva para cada familia
+# calcular el costo diario de la dieta de subsistencia para cada familia
 dieta_2_aprox_3 = merge(dataset_aprox_3, dieta_2[c("grupo_demo", "sexo", "costo_dia")],
                         by = c("grupo_demo", "sexo"), all.x = TRUE)
 
@@ -108,23 +110,23 @@ for (k in 1:nrow(dieta_2_aprox_3)) {
   dieta_2_aprox_3_hogar$costo_diario[id_x] = sum(df$costo_dia)
 }
 
-# datos sobre gasto per capita en alimentacion
+# datos sobre gasto por hogar en alimentacion
 
 dieta_2_aprox_3_hogar_gasto = merge(dieta_2_aprox_3_hogar, 
-                                    dataset_2_na[c("id", "per_capita")],
+                                    dataset_2_na[c("id", "ingreso_alimentos", "FEX_C18")],
                                     by = "id", all.y = FALSE, all.x = FALSE)
 
 # provisionalmente: eliminar hogares con recien nacidos
 dieta_2_aprox_3_hogar_gasto = dieta_2_aprox_3_hogar_gasto[!is.na(dieta_2_aprox_3_hogar_gasto$costo_diario),]
 
-# construir per capita diario
-dieta_2_aprox_3_hogar_gasto$per_capita_dia = dieta_2_aprox_3_hogar_gasto$per_capita/30
+# construir gasto diario
+dieta_2_aprox_3_hogar_gasto$gasto_dia = dieta_2_aprox_3_hogar_gasto$ingreso_alimentos/30
 
 # crear la dummy para construir la proporción
 dieta_2_aprox_3_hogar_gasto$dummy = NA
 
 for (k in 1:nrow(dieta_2_aprox_3_hogar_gasto)) {
-  if (dieta_2_aprox_3_hogar_gasto$per_capita_dia[k] < dieta_2_aprox_3_hogar_gasto$costo_diario[k]) {
+  if (dieta_2_aprox_3_hogar_gasto$gasto_dia[k] < dieta_2_aprox_3_hogar_gasto$costo_diario[k]) {
     dieta_2_aprox_3_hogar_gasto$dummy[k] = 1
   } else {
     dieta_2_aprox_3_hogar_gasto$dummy[k] = 0
@@ -132,16 +134,18 @@ for (k in 1:nrow(dieta_2_aprox_3_hogar_gasto)) {
 }
 
 # calcular proporcion de hogares por debajo de la linea
+N = sum(dieta_2_aprox_3_hogar_gasto$FEX_C18)
+
 schneider_outcome_2 = as.data.frame(matrix(nrow = 1, ncol=2))
 colnames(schneider_outcome_2) = c("Tipo", "Tasa")
 schneider_outcome_2$Tipo = "Dieta nutritiva"
-schneider_outcome_2$Tasa = sum(dieta_2_aprox_3_hogar_gasto$dummy)/nrow(dieta_2_aprox_3_hogar_gasto)
+schneider_outcome_2$Tasa = (sum(dieta_2_aprox_3_hogar_gasto$dummy*dieta_2_aprox_3_hogar_gasto$FEX_C18)/N)*100
+
 
 #####################################
 ## Dieta saludable o recomendada   ##
 #####################################
-
-# calcular el costo diario de la dieta saludable para cada familia
+# calcular el costo diario de la dieta de subsistencia para cada familia
 dieta_3_aprox_3 = merge(dataset_aprox_3, dieta_3[c("grupo_demo", "sexo", "costo_dia")],
                         by = c("grupo_demo", "sexo"), all.x = TRUE)
 
@@ -163,23 +167,23 @@ for (k in 1:nrow(dieta_3_aprox_3)) {
   dieta_3_aprox_3_hogar$costo_diario[id_x] = sum(df$costo_dia)
 }
 
-# datos sobre gasto per capita en alimentacion
+# datos sobre gasto por hogar en alimentacion
 
 dieta_3_aprox_3_hogar_gasto = merge(dieta_3_aprox_3_hogar, 
-                                    dataset_2_na[c("id", "per_capita")],
+                                    dataset_2_na[c("id", "ingreso_alimentos", "FEX_C18")],
                                     by = "id", all.y = FALSE, all.x = FALSE)
 
 # provisionalmente: eliminar hogares con recien nacidos
 dieta_3_aprox_3_hogar_gasto = dieta_3_aprox_3_hogar_gasto[!is.na(dieta_3_aprox_3_hogar_gasto$costo_diario),]
 
-# construir per capita diario
-dieta_3_aprox_3_hogar_gasto$per_capita_dia = dieta_3_aprox_3_hogar_gasto$per_capita/30
+# construir gasto diario
+dieta_3_aprox_3_hogar_gasto$gasto_dia = dieta_3_aprox_3_hogar_gasto$ingreso_alimentos/30
 
 # crear la dummy para construir la proporción
 dieta_3_aprox_3_hogar_gasto$dummy = NA
 
 for (k in 1:nrow(dieta_3_aprox_3_hogar_gasto)) {
-  if (dieta_3_aprox_3_hogar_gasto$per_capita_dia[k] < dieta_3_aprox_3_hogar_gasto$costo_diario[k]) {
+  if (dieta_3_aprox_3_hogar_gasto$gasto_dia[k] < dieta_3_aprox_3_hogar_gasto$costo_diario[k]) {
     dieta_3_aprox_3_hogar_gasto$dummy[k] = 1
   } else {
     dieta_3_aprox_3_hogar_gasto$dummy[k] = 0
@@ -187,10 +191,12 @@ for (k in 1:nrow(dieta_3_aprox_3_hogar_gasto)) {
 }
 
 # calcular proporcion de hogares por debajo de la linea
+N = sum(dieta_3_aprox_3_hogar_gasto$FEX_C18)
+
 schneider_outcome_3 = as.data.frame(matrix(nrow = 1, ncol=2))
 colnames(schneider_outcome_3) = c("Tipo", "Tasa")
 schneider_outcome_3$Tipo = "Dieta saludable"
-schneider_outcome_3$Tasa = sum(dieta_3_aprox_3_hogar_gasto$dummy)/nrow(dieta_3_aprox_3_hogar_gasto)
+schneider_outcome_3$Tasa = (sum(dieta_3_aprox_3_hogar_gasto$dummy*dieta_3_aprox_3_hogar_gasto$FEX_C18)/N)*100
 
 
 ##########################

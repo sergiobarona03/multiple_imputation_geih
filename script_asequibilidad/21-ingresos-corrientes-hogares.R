@@ -31,5 +31,5 @@ for (k in 1:length(hogares_id)) {
 }
 
 # incluir la variable de tamaño de los hogares
-dataset_2 = merge(dataset_2, dataset[c("id", "P6008")], by ="id")
+dataset_2 = merge(dataset_2, dataset[c("id", "P6008", "FEX_C18")], by ="id")
 dataset_2 = dataset_2[!duplicated(dataset_2),]

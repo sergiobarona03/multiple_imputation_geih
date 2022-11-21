@@ -18,7 +18,7 @@ dataset_2_na = dataset_2[!is.na(dataset_2$deciles),]
 
 deciles_gasto = data.frame(levels(as.factor(dataset_2_na$deciles)))
 colnames(deciles_gasto) = "deciles"
-deciles_gasto$share = c(0.60, 0.6, 0.5, 0.5, 0.5, 0.4, 0.4, 0.4, 0.2, 0.2)
+deciles_gasto$share = c( 0.5,  0.5, 0.5, 0.5, 0.5,  0.5, 0.5,  0.5,  0.5,  0.5)
 
 ###################################################
 ## Determinar el ingreso dedicado a alimentacion ##
