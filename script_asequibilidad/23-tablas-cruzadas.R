@@ -6,7 +6,6 @@ source(here::here("script_asequibilidad/", "22-proporcion-gasto.R"))
 
 # tabla: deciles de ingresos vs tamaño del hogar
 
-
 table_1 = dataset_2_na %>% group_by(deciles, P6008) %>% summarise(sum(FEX_C18))
 
 colnames(table_1) = c("Decil", "Size", "Freq")

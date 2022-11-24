@@ -53,7 +53,7 @@ En lo sucesivo, se presenta una aplicación del método de coincidencia por medi
 
 ```{r, message=FALSE, echo=FALSE, warning=FALSE, cache=FALSE, results=FALSE, comment=FALSE}
 # cargar base de datos para imputar
-setwd("C:/Users/lea8/Desktop/multiple_imputation_geih")
+setwd("/Users/sergiobarona03/Desktop/multiple_imputation_geih")
 library(here)
 source(here::here("script_asequibilidad/", "33-tercera-aprox.R"))
 ```

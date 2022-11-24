@@ -2,7 +2,6 @@
 ########################
 ## 33-tercera-aprox.R ##
 ########################
-
 library(here)
 source(here::here("script_asequibilidad/", "322-resultados-segunda-individuos.R"))
 

@@ -1,8 +1,8 @@
 
-################################################
-## PRUEBA: VARIABLE DE GASTO EN ALIMENTACIÓN  ##
-##  PARA LOS HOGARES DE CALI, VALLE DEL CAUCA ##
-################################################
+#########################################
+## 221- Proporcion del gasto desde ECV ##
+#########################################
+
 library(dplyr)
 library(tidyverse)
 
@@ -110,6 +110,9 @@ for (k in 1:nrow(gastos_ingresos)) {
 
 # guardar base de datos expandida
 saveRDS(gastos_ingresos_exp, here::here("prueba_gastos_ecv/gastos_ingresos_exp.RDS"))
+
+# leer la base de datos expandida
+gastos_ingresos_exp = readRDS(here::here("prueba_gastos_ecv/gastos_ingresos_exp.RDS"))
 
 # proporción del gasto
 gastos_ingresos_exp$share_gasto = gastos_ingresos_exp$gasto_alimentos/gastos_ingresos_exp$gasto_total
@@ -231,6 +234,53 @@ for (i in 1:nrow(mean_share_3)) {
 mean_share_3$share = mean_share_3$share*100
 
 
+#############################################
+## Calcular deciles segun la clasificacion ##
+##        derivada de la GEIH (2022)       ##
+#############################################
 
+# diferenciar los ingresos del hogar segun la clasificacion por 
+# deciles y quintiles de la GEIH
+deciles = quantile(dataset_2$ingresos, probs = seq(0, 1, by = .1))
+quintiles = quantile(dataset_2$ingresos, probs = seq(0, 1, by = .2))
+
+gastos_ingresos_exp = gastos_ingresos_exp %>% mutate(deciles = cut(I_HOGAR, deciles, c("decil 1", "decil 2", "decil 3", "decil 4", "decil 5",
+                                                                               "decil 6", "decil 7", "decil 8", "decil 9", "decil 10")))
+
+gastos_ingresos_exp =  gastos_ingresos_exp %>% mutate(quintiles = cut(I_HOGAR, quintiles, c("Q1", "Q2", 
+                                                                                        "Q3", "Q4", "Q5")))
+
+#eliminar valores NA porque no se ajustan a los intervalos (ni quintiles ni deciles)
+gastos_ingresos_exp = na.omit(gastos_ingresos_exp)
+
+
+# calculo de proporciones medias del gasto en alimentacion (quintiles)
+mean_share_3 = data.frame(c("Q1", "Q2", 
+                            "Q3", "Q4", "Q5"))
+
+colnames(mean_share_3) = "quintil"
+mean_share_3$share = NA
+
+for (i in 1:nrow(mean_share_3)) {
+  df = gastos_ingresos_exp %>% filter(quintiles %in% paste0("Q",i))
+  mean_share_3$share[i] = mean(df$share_gasto)
+}
+
+mean_share_3$share = mean_share_3$share*100
+
+# calculo de proporciones medias del gasto en alimentacion (deciles)
+mean_share = data.frame(c("decil 1", "decil 2", "decil 3",
+                          "decil 4", "decil 5", "decil 6",
+                          "decil 7", "decil 8", "decil 9",
+                          "decil 10"))
+colnames(mean_share) = "decil"
+mean_share$share = NA
+
+for (i in 1:nrow(mean_share)) {
+  df = gastos_ingresos_exp %>% filter(deciles %in% mean_share$decil[i])
+  mean_share$share[i] = mean(df$share_gasto)
+}
+
+mean_share$share = mean_share$share*100
 
 

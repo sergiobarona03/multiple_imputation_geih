@@ -18,7 +18,8 @@ dataset_2_na = dataset_2[!is.na(dataset_2$deciles),]
 
 deciles_gasto = data.frame(levels(as.factor(dataset_2_na$deciles)))
 colnames(deciles_gasto) = "deciles"
-deciles_gasto$share = c( 0.5,  0.5, 0.5, 0.5, 0.5,  0.5, 0.5,  0.5,  0.5,  0.5)
+deciles_gasto$share = c( 0.31478,  0.16449, 0.14856, 
+                         0.144, 0.1322,  0.11439, 0.11522,  0.10748,  0.09165,  0.08167)
 
 ###################################################
 ## Determinar el ingreso dedicado a alimentacion ##
@@ -38,7 +39,6 @@ dataset_2_na$ingreso_alimentos = dataset_2_na$share*dataset_2_na$ingresos
 ## Calcular la nueva distribución por deciles    ##
 ## para el gasto en alimentación de los hogares  ##
 ###################################################
-
 deciles_gasto$ingresos_corrientes = quantile(dataset_2$ingresos, probs = seq(0.1,1,by = 0.1))
 deciles_gasto$gasto_alimentacion = deciles_gasto$ingresos_corrientes*deciles_gasto$share
 

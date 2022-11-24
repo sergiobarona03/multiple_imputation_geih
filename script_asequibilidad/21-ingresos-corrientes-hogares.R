@@ -2,7 +2,8 @@
 ######################################
 ## 21-ingresos-corrientes-hogares.R ##
 ######################################
-source(here::here("script_asequibilidad/", "20-multiple-imputation.R"))
+#source(here::here("script_asequibilidad/", "20-multiple-imputation.R"))
+source(here::here("script_asequibilidad/", "10-cargar-datos.R"))
 
 # merge completo
 OCUP_Noocup <- merge(ocup,Noocup, by = c("DIRECTORIO", "SECUENCIA_P","ORDEN"), all = TRUE)

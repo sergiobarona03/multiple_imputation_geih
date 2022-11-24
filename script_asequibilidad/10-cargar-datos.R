@@ -3,8 +3,6 @@
 ##############################
 source(here::here("script_asequibilidad/", "00-cargar-librerias.R"))
 
-setwd("C:/Users/lea8/Desktop/multiple_imputation_geih")
-
 Ocupados = read.csv("datos_geih/Ocupados.CSV", sep = ";")
 
 Datos_del_hogar_y_la_vivienda = read.csv("datos_geih/Datos del hogar y la vivienda.CSV", sep = ";")
