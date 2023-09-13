@@ -8,23 +8,33 @@ source(here::here("script_asequibilidad/", "10-cargar-datos.R"))
 ## Preparación de la base de datos ##
 #####################################
 
-# filtro para Cali, Valle del Cauca (código 76)
-OcupadosF <- filter(Ocupados,AREA == 76)
-Datos_del_hogar_y_la_viviendaF <- filter(Datos_del_hogar_y_la_vivienda,AREA == 76)
-No_ocupadosF <- filter(No_ocupados,AREA == 76)
-Otros_ingresos_e_impuestosF <- filter(Otros_ingresos_e_impuestos,AREA == 76)
-Caracteristicas_generalesF <- filter(Caracteristicas_generales,AREA == 76)
+# filtro para Cali, Valle del Cauca (código 76) y variables de interés
+ocup <-  filter(Ocupados[c("DIRECTORIO","SECUENCIA_P", "ORDEN", "AREA","P6800", "INGLABO")], AREA == 76)
+
+Datos_vivi <- filter(Datos_del_hogar_y_la_vivienda[c("DIRECTORIO","SECUENCIA_P", "AREA","P4030S1A1","P6008")],
+                                         AREA == 76)
+
+Noocup <- filter(No_ocupados[c("DIRECTORIO","SECUENCIA_P","ORDEN","AREA","P7422S1")],
+                       AREA == 76)
+
+Ot_ing <- filter(Otros_ingresos_e_impuestos[c("DIRECTORIO","SECUENCIA_P","ORDEN","AREA","P7500S1A1","P7500S2A1","P7500S3A1")],
+                                      AREA == 76)
+
+Car_gen <- filter(Caracteristicas_generales[c("DIRECTORIO","SECUENCIA_P","ORDEN","AREA","P3271","P6050","P6040", "P3042", "FEX_C18")],
+                                     AREA == 76)
+
+ocup = ocup[setdiff(colnames(ocup), "AREA")] 
+Datos_vivi = Datos_vivi[setdiff(colnames(Datos_vivi), "AREA")] 
+Noocup = Noocup[setdiff(colnames(Noocup), "AREA")] 
+Ot_ing = Ot_ing[setdiff(colnames(Ot_ing), "AREA")] 
+Car_gen = Car_gen[setdiff(colnames(Car_gen), "AREA")] 
 
 # seleccionar variables de interés
-ocup <- OcupadosF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P6800", "INGLABO")]
-Datos_vivi <- Datos_del_hogar_y_la_viviendaF[c("DIRECTORIO","SECUENCIA_P","P4030S1A1","P6008")]
-Noocup <- No_ocupadosF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P7422S1")]
-Ot_ing <- Otros_ingresos_e_impuestosF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P7500S1A1","P7500S2A1","P7500S3A1")]
-Car_gen <- Caracteristicas_generalesF[c("DIRECTORIO","SECUENCIA_P","ORDEN","P3271","P6050","P6040", "P3042", "FEX_C18")]
 
 # selección de base de datos para imputar
 dataset_imputar = merge(ocup, Car_gen, all.x = TRUE)
 dataset_imputar = dataset_imputar[c("DIRECTORIO", "SECUENCIA_P", "ORDEN", "INGLABO", "P6040", "P3271", "P3042", "P6800")]
+
 dataset_imputar$id = paste0(dataset_imputar$DIRECTORIO,"-",dataset_imputar$SECUENCIA_P,"-",dataset_imputar$ORDEN)
 dataset_imputar = dataset_imputar[c("id","INGLABO", "P6040", "P3271", "P3042", "P6800")]
 colnames(dataset_imputar) = c("id_hogar", "ing", "edad", "sexo", "estudio", "horas")
